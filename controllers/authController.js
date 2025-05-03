@@ -15,6 +15,11 @@ exports.register = async (req, res, next) => {
     }
 
     const id_photo_url = `/uploads/id_photos/${req.file.filename}`;
+    const filePath = path.join(
+      __dirname,
+      "../uploads/id_photos",
+      req.file.filename
+    );
 
     const [existingId, existingPhone] = await Promise.all([
       User.findOne({ id_number }),
@@ -22,11 +27,6 @@ exports.register = async (req, res, next) => {
     ]);
 
     if (existingId || existingPhone) {
-      const filePath = path.join(
-        __dirname,
-        "../uploads/id_photos",
-        req.file.filename
-      );
       deleteFile(filePath);
 
       if (existingId && existingPhone) {
@@ -46,24 +46,19 @@ exports.register = async (req, res, next) => {
         });
       }
     }
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-
+    
     if (role === "farmer") {
       if (!land_size || !crop_type) {
+        deleteFile(filePath); // cleanup
         return next({
           status: 400,
           message: "Farmer land size and crop type are required",
         });
-        const filePath = path.join(
-          __dirname,
-          "../uploads/id_photos",
-          req.file.filename
-        );
-        deleteFile(filePath);
       }
     }
 
+    const hashedPassword = await bcrypt.hash(password, 10);    
+ 
     const newUser = new User({
       name,
       id_number,
