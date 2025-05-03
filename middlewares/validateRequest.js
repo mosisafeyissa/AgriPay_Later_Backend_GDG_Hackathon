@@ -55,3 +55,124 @@ exports.validateLogin = [
     next();
   },
 ];
+
+exports.validateHarvest = [
+  body("harvest_amount")
+    .notEmpty()
+    .withMessage("Harvest amount is required")
+    .isNumeric()
+    .withMessage("Harvest amount must be a number"),
+
+  body("crop").notEmpty().withMessage("Crop type is required"),
+
+  body("location")
+    .optional()
+    .isString()
+    .withMessage("Location must be a string"),
+
+  body("notes").optional().isString().withMessage("Notes must be a string"),
+
+  (req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return next({ status: 400, message: errors.array() });
+    }
+    next();
+  },
+];
+
+
+
+exports.validateLoanRequest = [
+  body("amount")
+    .notEmpty()
+    .withMessage("Loan amount is required")
+    .isFloat({ gt: 0 })
+    .withMessage("Loan amount must be a positive number"),
+
+  body("reason")
+    .optional()
+    .isString()
+    .withMessage("Reason must be a string"),
+
+  (req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return next({ status: 400, message: errors.array() });
+    }
+    next();
+  },
+];
+
+
+exports.validateRepaymentRequest = [
+  body("loanId").notEmpty().withMessage("Loan ID is required"),
+  body("amount")
+    .notEmpty()
+    .withMessage("Amount is required")
+    .isFloat({ gt: 0 })
+    .withMessage("Amount must be a positive number"),
+  (req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return next({ status: 400, message: errors.array() });
+    }
+    next();
+  },
+];
+
+
+exports.validateInputRequest = [
+  body("items")
+    .isArray({ min: 1 })
+    .withMessage("At least one input item is required"),
+
+  body("items.*.name").notEmpty().withMessage("Item name is required"),
+
+  body("items.*.quantity")
+    .isFloat({ gt: 0 })
+    .withMessage("Quantity must be a positive number"),
+
+  (req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return next({ status: 400, message: errors.array() });
+    }
+    next();
+  },
+];
+
+
+
+exports.validateEditInputRequest = [
+  body("items")
+    .optional()
+    .isArray({ min: 1 })
+    .withMessage("Items must be a non-empty array"),
+  body("items.*.name")
+    .optional()
+    .isString()
+    .withMessage("Each item must have a name"),
+  body("items.*.quantity")
+    .optional()
+    .isNumeric()
+    .withMessage("Quantity must be a number"),
+  body("items.*.unit")
+    .optional()
+    .isString()
+    .withMessage("Each item must have a unit"),
+  body("preferredDate")
+    .optional()
+    .isISO8601()
+    .toDate()
+    .withMessage("Preferred date must be a valid date"),
+  body("notes").optional().isString().withMessage("Notes must be a string"),
+
+  (req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return next({ status: 400, message: errors.array() });
+    }
+    next();
+  },
+];
