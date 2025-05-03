@@ -1,6 +1,6 @@
 // controllers/farmerController.js
 const path = require("path");
-const Loan = require("../models/loan");
+const Loan = require("../models/Loan");
 const Repayment = require("../models/repayment");
 const Harvest = require("../models/harvest");
 const Message = require("../models/message");
