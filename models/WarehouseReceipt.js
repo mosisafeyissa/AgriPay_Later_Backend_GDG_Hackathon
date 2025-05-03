@@ -1,4 +1,6 @@
 // models/WarehouseReceipt.js
+const mongoose = require("mongoose");
+
 const warehouseReceiptSchema = new mongoose.Schema(
   {
     farmer: {

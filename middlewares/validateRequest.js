@@ -1,4 +1,5 @@
 const { body, validationResult } = require("express-validator");
+const { param } = require("express-validator");
 
 exports.validateRegistration = [
   body("name")
@@ -167,6 +168,18 @@ exports.validateEditInputRequest = [
     .toDate()
     .withMessage("Preferred date must be a valid date"),
   body("notes").optional().isString().withMessage("Notes must be a string"),
+
+  (req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return next({ status: 400, message: errors.array() });
+    }
+    next();
+  },
+];
+
+exports.validateRepaymentIdParam = [
+  param("id").isMongoId().withMessage("Invalid repayment ID"),
 
   (req, res, next) => {
     const errors = validationResult(req);

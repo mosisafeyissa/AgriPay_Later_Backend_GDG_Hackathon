@@ -15,5 +15,5 @@ router.post(
 );
 
 router.post("/login", validateLogin, authController.login);
- 
+
 module.exports = router;

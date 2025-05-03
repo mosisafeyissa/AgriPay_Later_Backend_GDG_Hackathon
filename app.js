@@ -6,6 +6,7 @@ const authRoutes = require("./routes/auth");
 const errorHandler = require("./middlewares/errorHandler");
 const connectDB = require('./config/db');
 const farmerRoutes = require("./routes/farmer");
+const adminRoutes = require("./routes/admin");
 
 dotenv.config();
 const app = express();
@@ -19,6 +20,7 @@ app.use("/uploads", express.static("uploads"));
 app.use("/api/auth", authRoutes);
 
 app.use("/api/farmer", farmerRoutes);
+app.use("/api/admin", adminRoutes);
 
 app.use(errorHandler);
 

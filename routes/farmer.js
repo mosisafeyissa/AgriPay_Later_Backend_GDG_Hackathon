@@ -146,4 +146,10 @@ router.delete(
 );
 
 
+// View profile
+router.get("/profile", requireAuth, requireFarmer, farmerController.getProfile);
+
+// Update profile
+router.put("/profile", requireAuth, requireFarmer, farmerController.updateProfile);
+
 module.exports = router;

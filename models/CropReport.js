@@ -1,4 +1,5 @@
 // models/CropReport.js
+const mongoose = require("mongoose");
 const cropReportSchema = new mongoose.Schema(
   {
     farmer: {

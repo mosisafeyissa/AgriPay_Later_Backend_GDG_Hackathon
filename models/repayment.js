@@ -37,6 +37,9 @@ const repaymentSchema = new mongoose.Schema(
     notes: {
       type: String,
     },
+    isApproved: { type: Boolean, default: false },
+    approvedAt: { type: Date },
+    approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: "Admin" },
   },
   { timestamps: true }
 );

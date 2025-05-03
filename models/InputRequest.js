@@ -1,7 +1,6 @@
 // models/InputRequest.js
 const mongoose = require("mongoose");
 
-
 const inputRequestSchema = new mongoose.Schema(
   {
     farmer: {
@@ -13,7 +12,7 @@ const inputRequestSchema = new mongoose.Schema(
       {
         name: { type: String, required: true },
         quantity: { type: Number, required: true, min: 1 },
-        unit: { type: String, default: "kg" }, 
+        unit: { type: String, default: "kg" },
       },
     ],
     preferredDate: {

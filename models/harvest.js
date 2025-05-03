@@ -1,5 +1,5 @@
 const mongoose = require("mongoose");
-
+// path to this file: asasdasd/models/harvest.js
 const harvestSchema = new mongoose.Schema(
   {
     farmer: {

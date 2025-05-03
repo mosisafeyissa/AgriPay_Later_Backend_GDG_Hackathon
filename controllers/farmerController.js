@@ -584,3 +584,39 @@ exports.cancelInputRequest = async (req, res, next) => {
     return next({ status: 500, message: "Failed to cancel input request" });
   }
 };
+
+
+exports.getProfile = async (req, res, next) => {
+  try {
+    const farmer = await User.findById(req.user.id).select("-password"); // Exclude password
+    if (!farmer) {
+      return res.status(404).json({ message: "Farmer not found" });
+    }
+    res.json(farmer);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// PUT /api/farmer/profile
+exports.updateProfile = async (req, res, next) => {
+  try {
+    const allowedFields = ["name", "phone", "location", "email"];
+    const updates = {};
+
+    allowedFields.forEach((field) => {
+      if (req.body[field]) {
+        updates[field] = req.body[field];
+      }
+    });
+
+    const updated = await User.findByIdAndUpdate(req.user.id, updates, {
+      new: true,
+      runValidators: true,
+    }).select("-password");
+
+    res.json({ message: "Profile updated successfully", user: updated });
+  } catch (err) {
+    next(err);
+  }
+};
