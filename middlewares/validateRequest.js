@@ -9,9 +9,12 @@ exports.validateRegistration = [
     .isAlpha("en-US", { ignore: " " })
     .withMessage("Name must contain only letters"),
 
-  body("id_number")
-    .isLength({ min: 5 })
-    .withMessage("ID number must be at least 5 digits"),
+  body("email")
+    .trim()
+    .notEmpty()
+    .withMessage("Email is required")
+    .isEmail()
+    .withMessage("Invalid email format"),
 
   body("phone")
     .matches(/^(\+251|0)?9\d{8}$/)
@@ -34,13 +37,13 @@ exports.validateRegistration = [
   },
 ];
 
-
 exports.validateLogin = [
-  body("id_number")
+  body("email")
+    .trim()
     .notEmpty()
-    .withMessage("ID number is required")
-    .isLength({ min: 5 })
-    .withMessage("ID number must be at least 5 digits"),
+    .withMessage("Email is required")
+    .isEmail()
+    .withMessage("Invalid email format"),
 
   body("password")
     .notEmpty()

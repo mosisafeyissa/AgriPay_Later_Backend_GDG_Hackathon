@@ -37,6 +37,13 @@ router.get(
   farmerController.getHarvests
 );
 
+router.get(
+  "/harvests/:id",
+  requireAuth,
+  requireFarmer,
+  farmerController.getHarvestById
+);
+
 router.put(
   "/harvests/:id",
   requireAuth,
@@ -53,9 +60,8 @@ router.post(
   farmerController.requestLoan
 );
 
-
-//not found
-// router.get("/loans", requireAuth, requireFarmer, farmerController.getLoans);
+router.get("/loans/:id", requireAuth, farmerController.getLoanById);
+router.get("/loans", requireAuth, requireFarmer, farmerController.getMyLoans);
 
 router.patch(
   "/loans/:loanId",
@@ -76,17 +82,8 @@ router.post(
   "/repayments",
   requireAuth,
   requireFarmer,
-  upload.single("receiptImage"),
   validateRepaymentRequest,
   farmerController.createRepayment
-);
-
-
-router.post(
-  "/messages",
-  requireAuth,
-  requireFarmer,
-  farmerController.sendMessage
 );
 
 
@@ -110,39 +107,6 @@ router.delete(
   requireAuth,
   requireFarmer,
   farmerController.deleteMessage
-);
-
-
-router.post(
-  "/input-requests",
-  requireAuth,
-  requireFarmer,
-  validateInputRequest,
-  farmerController.createInputRequest
-);
-
-
-router.get(
-  "/input-requests",
-  requireAuth,
-  requireFarmer,
-  farmerController.getInputRequests
-);
-
-
-router.patch(
-  "/input-requests/:id",
-  requireAuth,
-  requireFarmer,
-  validateEditInputRequest,
-  farmerController.editInputRequest
-);
-
-router.delete(
-  "/input-requests/:id",
-  requireAuth,
-  requireFarmer,
-  farmerController.cancelInputRequest
 );
 
 

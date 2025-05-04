@@ -7,7 +7,7 @@ const harvestSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
-    harvest_amount: { type: Number, reqired: true },
+    harvest_amount: { type: Number, required: true },
     date_logged: { type: Date, default: Date.now },
     crop: { type: String, required: true },
     status: {

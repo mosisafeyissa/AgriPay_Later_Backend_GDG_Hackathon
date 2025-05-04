@@ -9,10 +9,7 @@ const loanSchema = new mongoose.Schema(
     },
     requested_input: String,
     amount: { type: Number, required: true },
-    remainingBalance: {
-      type: Number,
-      required: true,
-    },
+
     amountRemaining: {
       type: Number,
       required: true,

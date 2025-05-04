@@ -30,16 +30,13 @@ const repaymentSchema = new mongoose.Schema(
       enum: ["pending", "approved", "rejected"],
       default: "pending",
     },
-    receiptImage: {
-      type: String, // path to image file
-      required: true,
-    },
+
     notes: {
       type: String,
     },
     isApproved: { type: Boolean, default: false },
     approvedAt: { type: Date },
-    approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: "Admin" },
+    approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   },
   { timestamps: true }
 );

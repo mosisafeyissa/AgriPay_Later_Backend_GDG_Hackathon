@@ -1,55 +1,33 @@
 const User = require("../models/User");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const fs = require("fs");
-const path = require("path");
-const { deleteFile } = require("../services/fileHelper");
 
 exports.register = async (req, res, next) => {
   try {
-    const { name, id_number, phone, password, role, land_size, crop_type } =
+    const { name, email, phone, password, role, land_size, crop_type } =
       req.body;
 
-    if (!req.file) {
-      return next({ status: 400, message: "ID photo is required" });
-    }
-
-    const id_photo_url = `/uploads/id_photos/${req.file.filename}`;
-    const filePath = path.join(
-      __dirname,
-      "../uploads/id_photos",
-      req.file.filename
-    );
-
-    const [existingId, existingPhone] = await Promise.all([
-      User.findOne({ id_number }),
+    // Check for duplicate email or phone
+    const [existingEmail, existingPhone] = await Promise.all([
+      User.findOne({ email }),
       User.findOne({ phone }),
     ]);
 
-    if (existingId || existingPhone) {
-      deleteFile(filePath);
-
-      if (existingId && existingPhone) {
-        return next({
-          status: 400,
-          message: "User with this ID and phone number already exists",
-        });
-      } else if (existingId) {
-        return next({
-          status: 400,
-          message: "User with this ID already exists",
-        });
-      } else {
-        return next({
-          status: 400,
-          message: "User with this phone number already exists",
-        });
-      }
+    if (existingEmail || existingPhone) {
+      return next({
+        status: 400,
+        message:
+          existingEmail && existingPhone
+            ? "User with this email and phone already exists"
+            : existingEmail
+            ? "User with this email already exists"
+            : "User with this phone number already exists",
+      });
     }
-    
+
+    // Validate farmer-specific fields
     if (role === "farmer") {
       if (!land_size || !crop_type) {
-        deleteFile(filePath); // cleanup
         return next({
           status: 400,
           message: "Farmer land size and crop type are required",
@@ -57,45 +35,44 @@ exports.register = async (req, res, next) => {
       }
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);    
- 
+    const hashedPassword = await bcrypt.hash(password, 10);
+
     const newUser = new User({
       name,
-      id_number,
+      email,
       phone,
       password: hashedPassword,
       role,
       land_size,
       crop_type,
-      id_photo: id_photo_url,
     });
 
     await newUser.save();
 
-    return res.status(201).json({ message: "Registration successful" });
+    res.status(201).json({ message: "Registration successful" });
   } catch (err) {
     console.error("Registration error:", err);
     return next({ status: 500, message: "Server error during registration" });
   }
 };
 
-
 exports.login = async (req, res, next) => {
   try {
-    const { id_number, password } = req.body;
+    const { email, password } = req.body;
 
-    if (!id_number || !password) {
+    if (!email || !password) {
       return next({
         status: 400,
-        message: "ID number and password are required",
+        message: "Email and password are required",
       });
     }
 
-    const user = await User.findOne({ id_number });
+    const user = await User.findOne({ email });
     if (!user) return next({ status: 404, message: "User not found" });
 
     const passwordMatch = await bcrypt.compare(password, user.password);
-    if (!passwordMatch) return next({ status: 401, message: "Invalid credentials" });
+    if (!passwordMatch)
+      return next({ status: 401, message: "Invalid credentials" });
 
     const token = jwt.sign(
       { id: user._id, role: user.role },
@@ -108,6 +85,7 @@ exports.login = async (req, res, next) => {
       name: user.name,
       role: user.role,
       phone: user.phone,
+      email: user.email,
     };
 
     if (user.role === "farmer") {

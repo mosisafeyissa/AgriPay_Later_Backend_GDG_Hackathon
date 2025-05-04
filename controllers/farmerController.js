@@ -5,6 +5,7 @@ const Repayment = require("../models/repayment");
 const Harvest = require("../models/harvest");
 const Message = require("../models/Message");
 const InputRequest = require("../models/InputRequest");
+const mongoose = require("mongoose");
 
 
 exports.getFarmerDashboard = async (req, res, next) => {
@@ -19,25 +20,29 @@ exports.getFarmerDashboard = async (req, res, next) => {
       Loan.find({ farmer: farmerId }),
       Repayment.find({ farmer: farmerId }),
       Harvest.find({ farmer: farmerId }),
-      Message.find({ recipient: farmerId })
-        .select("title body isRead createdAt")
+      Message.find({ to_farmer: farmerId })
+        .select("content type seen createdAt")
         .sort({ isRead: 1, createdAt: -1 }),
     ]);
 
     const approvedLoans = loans.filter((loan) => loan.status === "approved");
-    const totalOwed = approvedLoans.reduce((sum, loan) => sum + loan.amount, 0);
+    const totalOwed = approvedLoans.reduce(
+      (sum, loan) => sum + loan.amountRemaining,
+      0
+    );
+
     const totalPaid = repayments.reduce((sum, rep) => sum + rep.amount, 0);
 
     const approvedHarvests = harvests.filter((h) => h.status === "approved");
     const latestApprovedHarvest = approvedHarvests[approvedHarvests.length - 1];
 
-    const eligibleLoan = latestApprovedHarvest
+    const eligibleLoan = latestApprovedHarvest?.harvest_amount
       ? Math.floor(latestApprovedHarvest.harvest_amount * 10)
       : 0;
 
     const recentLoans = loans.slice(-5).reverse();
     const recentMessages = messages.slice(0, 5);
-    const unreadMessagesCount = messages.filter((msg) => !msg.isRead).length;
+    const unreadMessagesCount = messages.filter((msg) => !msg.seen).length;
 
     res.status(200).json({
       summary: {
@@ -62,7 +67,7 @@ exports.createHarvest = async (req, res, next) => {
   try {
     const { harvest_amount, crop, location, notes } = req.body;
 
-    if (!harvest_amount || !crop) {
+    if (harvest_amount == null || crop == null || crop.trim() === "") {
       return next({
         status: 400,
         message: "Harvest amount and crop are required",
@@ -93,7 +98,9 @@ exports.createHarvest = async (req, res, next) => {
 exports.getHarvests = async (req, res, next) => {
   try {
     const farmerId = req.user.id;
-    const harvests = await Harvest.find({ farmer: farmerId }).sort({
+    const harvests = await Harvest.find({
+      farmer: new mongoose.Types.ObjectId(farmerId),
+    }).sort({
       createdAt: -1,
     });
     res.status(200).json({ harvests });
@@ -102,6 +109,33 @@ exports.getHarvests = async (req, res, next) => {
     return next({ status: 500, message: "Failed to fetch harvests" });
   }
 };
+
+exports.getHarvestById = async (req, res, next) => {
+  try {
+    const harvestId = req.params.id;
+    const farmerId = req.user.id;
+
+    const harvest = await Harvest.findById(harvestId);
+
+    if (!harvest) {
+      return next({ status: 404, message: "Harvest not found" });
+    }
+
+    // Ensure the harvest belongs to the logged-in farmer
+    if (harvest.farmer.toString() !== farmerId) {
+      return next({
+        status: 403,
+        message: "Unauthorized to access this harvest",
+      });
+    }
+
+    res.status(200).json({ harvest });
+  } catch (err) {
+    console.error("Error fetching specific harvest:", err);
+    return next({ status: 500, message: "Failed to fetch harvest" });
+  }
+};
+
 
 exports.updateHarvest = async (req, res, next) => {
   try {
@@ -165,7 +199,12 @@ exports.requestLoan = async (req, res, next) => {
     }
 
     // Calculate eligible loan
-    const eligibleLoan = latestHarvest.harvest_amount * 10; // Example formula
+    if (!latestHarvest.harvest_amount || isNaN(latestHarvest.harvest_amount)) {
+      return next({ status: 400, message: "Harvest amount is invalid" });
+    }
+
+    const eligibleLoan = Math.floor(latestHarvest.harvest_amount * 10);
+ // Example formula
 
     if (amount > eligibleLoan) {
       return next({
@@ -177,6 +216,7 @@ exports.requestLoan = async (req, res, next) => {
     const newLoan = new Loan({
       farmer: farmerId,
       amount,
+      amountRemaining: amount,
       status: "pending",
     });
 
@@ -188,6 +228,25 @@ exports.requestLoan = async (req, res, next) => {
   } catch (err) {
     console.error("Error requesting loan:", err);
     return next({ status: 500, message: "Failed to request loan" });
+  }
+};
+
+
+exports.getLoanById = async (req, res, next) => {
+  try {
+    const farmerId = req.user.id;
+    const loanId = req.params.id;
+
+    const loan = await Loan.findOne({ _id: loanId, farmer: farmerId });
+
+    if (!loan) {
+      return res.status(404).json({ message: "Loan not found" });
+    }
+
+    res.status(200).json({ loan });
+  } catch (err) {
+    console.error("Error fetching loan:", err);
+    next({ status: 500, message: "Failed to fetch loan" });
   }
 };
 
@@ -219,15 +278,27 @@ exports.cancelPendingLoan = async (req, res, next) => {
   }
 };
 
+exports.getMyLoans = async (req, res, next) => {
+  try {
+    const farmerId = req.user.id;
 
+    const loans = await Loan.find({ farmer: farmerId }).sort({ createdAt: -1 });
+
+    res.status(200).json({ loans });
+  } catch (err) {
+    console.error("Error fetching loans:", err);
+    next({ status: 500, message: "Failed to fetch loans" });
+  }
+};
 
 exports.editPendingLoan = async (req, res, next) => {
   try {
     const farmerId = req.user.id;
     const { loanId } = req.params;
     const { amount } = req.body;
+    const { reason } = req.body; 
 
-    if (!amount || amount <= 0) {
+    if (amount == null || isNaN(amount) || amount <= 0) {
       return next({
         status: 400,
         message: "Loan amount must be a positive number",
@@ -245,6 +316,10 @@ exports.editPendingLoan = async (req, res, next) => {
     }
 
     loan.amount = amount;
+    loan.amountRemaining = amount;
+    if (reason) {
+      loan.reason = reason;
+    }
     await loan.save();
 
     res
@@ -322,17 +397,19 @@ exports.editPendingLoan = async (req, res, next) => {
 
 exports.createRepayment = async (req, res, next) => {
   try {
-    const { loanId, amount, notes } = req.body;
-    const receiptImage = req.file?.path;
-
-    if (!receiptImage) {
-      return next({ status: 400, message: "Receipt image is required" });
-    }
+    const { loanId, amount, notes, method } = req.body;
 
     if (!loanId || !amount || amount <= 0) {
       return next({
         status: 400,
         message: "Valid loanId and repayment amount are required",
+      });
+    }
+
+    if (!method || !["mobile_money", "bank", "cash"].includes(method)) {
+      return next({
+        status: 400,
+        message: "Repayment method must be one of: mobile_money, bank, or cash",
       });
     }
 
@@ -350,7 +427,7 @@ exports.createRepayment = async (req, res, next) => {
       loan: loanId,
       amount,
       notes,
-      receiptImage,
+      method,
       status: "pending",
       farmer: req.user.id,
     });
@@ -364,224 +441,6 @@ exports.createRepayment = async (req, res, next) => {
   } catch (err) {
     console.error("Error submitting repayment:", err);
     return next({ status: 500, message: "Error processing repayment" });
-  }
-};
-
-
-exports.sendMessage = async (req, res, next) => {
-  try {
-    const { title, content } = req.body;
-
-    const message = new Message({
-      recipient: req.user.id,
-      title,
-      content,
-      isRead: false, // Initially, the message is unread
-    });
-
-    await message.save();
-
-    return res.status(201).json({
-      message: "Message sent successfully",
-      data: message,
-    });
-  } catch (err) {
-    console.error("Error sending message:", err);
-    return next({ status: 500, message: "Failed to send message" });
-  }
-};
-
-
-exports.markMessageAsRead = async (req, res, next) => {
-  try {
-    const { messageId } = req.params;
-
-    const message = await Message.findById(messageId);
-
-    if (!message || message.recipient.toString() !== req.user.id) {
-      return next({ status: 404, message: "Message not found" });
-    }
-
-    // Mark the message as read
-    message.isRead = true;
-    await message.save();
-
-    return res.status(200).json({
-      message: "Message marked as read",
-      data: message,
-    });
-  } catch (err) {
-    console.error("Error marking message as read:", err);
-    return next({ status: 500, message: "Failed to mark message as read" });
-  }
-};
-
-
-exports.getUnreadMessages = async (req, res, next) => {
-  try {
-    const unreadMessages = await Message.find({
-      recipient: req.user.id,
-      isRead: false,
-    });
-
-    return res.status(200).json({
-      message: "Unread messages fetched successfully",
-      unreadMessages,
-    });
-  } catch (err) {
-    console.error("Error fetching unread messages:", err);
-    return next({ status: 500, message: "Failed to fetch unread messages" });
-  }
-};
-
-
-exports.deleteMessage = async (req, res, next) => {
-  try {
-    const { messageId } = req.params;
-
-    const message = await Message.findById(messageId);
-
-    if (!message || message.recipient.toString() !== req.user.id) {
-      return next({ status: 404, message: "Message not found" });
-    }
-
-    await message.remove();
-
-    return res.status(200).json({
-      message: "Message deleted successfully",
-    });
-  } catch (err) {
-    console.error("Error deleting message:", err);
-    return next({ status: 500, message: "Failed to delete message" });
-  }
-};
-
-
-exports.createInputRequest = async (req, res, next) => {
-  try {
-    const { items, preferredDate, notes } = req.body;
-
-    if (!items || !Array.isArray(items) || items.length === 0) {
-      return next({
-        status: 400,
-        message: "At least one input item must be provided",
-      });
-    }
-
-    const invalidItem = items.find(
-      (item) =>
-        !item.name ||
-        typeof item.name !== "string" ||
-        !item.quantity ||
-        typeof item.quantity !== "number"
-    );
-
-    if (invalidItem) {
-      return next({
-        status: 400,
-        message: "Each item must include a name and numeric quantity",
-      });
-    }
-
-    const newRequest = new InputRequest({
-      farmer: req.user.id,
-      items,
-      preferredDate,
-      notes,
-    });
-
-    await newRequest.save();
-
-    res.status(201).json({
-      message: "Input request submitted successfully",
-      inputRequest: newRequest,
-    });
-  } catch (err) {
-    console.error("Error creating input request:", err);
-    return next({ status: 500, message: "Error submitting input request" });
-  }
-};
-
-exports.getInputRequests = async (req, res, next) => {
-  try {
-    const farmerId = req.user.id;
-    const { status } = req.query;
-
-    const query = { farmer: farmerId };
-
-    if (status) {
-      query.status = status;
-    }
-
-    const requests = await InputRequest.find(query).sort({ createdAt: -1 });
-
-    res.status(200).json({ inputRequests: requests });
-  } catch (err) {
-    console.error("Error fetching input requests:", err);
-    return next({ status: 500, message: "Failed to fetch input requests" });
-  }
-};
-
-
-
-exports.editInputRequest = async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    const farmerId = req.user.id;
-    const { items, preferredDate, notes } = req.body;
-
-    const request = await InputRequest.findOne({ _id: id, farmer: farmerId });
-
-    if (!request) {
-      return next({ status: 404, message: "Input request not found" });
-    }
-
-    if (request.status !== "pending") {
-      return next({
-        status: 400,
-        message: "Only pending requests can be edited",
-      });
-    }
-
-    if (items) request.items = items;
-    if (preferredDate) request.preferredDate = preferredDate;
-    if (notes) request.notes = notes;
-
-    await request.save();
-
-    res.status(200).json({ message: "Input request updated", request });
-  } catch (err) {
-    console.error("Error editing input request:", err);
-    return next({ status: 500, message: "Failed to edit input request" });
-  }
-};
-
-
-
-exports.cancelInputRequest = async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    const farmerId = req.user.id;
-
-    const request = await InputRequest.findOne({ _id: id, farmer: farmerId });
-
-    if (!request) {
-      return next({ status: 404, message: "Input request not found" });
-    }
-
-    if (request.status !== "pending") {
-      return next({
-        status: 400,
-        message: "Only pending requests can be cancelled",
-      });
-    }
-
-    await InputRequest.deleteOne({ _id: id });
-
-    res.status(200).json({ message: "Input request cancelled" });
-  } catch (err) {
-    console.error("Error cancelling input request:", err);
-    return next({ status: 500, message: "Failed to cancel input request" });
   }
 };
 
@@ -618,5 +477,100 @@ exports.updateProfile = async (req, res, next) => {
     res.json({ message: "Profile updated successfully", user: updated });
   } catch (err) {
     next(err);
+  }
+};
+
+
+
+exports.markMessageAsRead = async (req, res, next) => {
+  try {
+    const { messageId } = req.params;
+
+    const message = await Message.findById(messageId);
+
+    if (!message || message.to_farmer.toString() !== req.user.id) {
+      return next({ status: 404, message: "Message not found" });
+    }
+
+    // Mark the message as read
+    message.seen = true;
+    await message.save();
+
+    return res.status(200).json({
+      message: "Message marked as read",
+      data: message,
+    });
+  } catch (err) {
+    console.error("Error marking message as read:", err);
+    return next({ status: 500, message: "Failed to mark message as read" });
+  }
+};
+
+
+
+exports.getUnreadMessages = async (req, res, next) => {
+  try {
+    const unreadMessages = await Message.find({
+      to_farmer: req.user.id, // Use to_farmer instead of recipient
+      seen: false, // Check if the message has been seen
+    });
+
+    return res.status(200).json({
+      message: "Unread messages fetched successfully",
+      unreadMessages,
+    });
+  } catch (err) {
+    console.error("Error fetching unread messages:", err);
+    return next({ status: 500, message: "Failed to fetch unread messages" });
+  }
+};
+
+
+
+exports.deleteMessage = async (req, res, next) => {
+  try {
+    const { messageId } = req.params;
+
+    const message = await Message.findById(messageId);
+
+    if (!message || message.to_farmer.toString() !== req.user.id) {
+      return next({ status: 404, message: "Message not found" });
+    }
+
+    await message.remove();
+
+    return res.status(200).json({
+      message: "Message deleted successfully",
+    });
+  } catch (err) {
+    console.error("Error deleting message:", err);
+    return next({ status: 500, message: "Failed to delete message" });
+  }
+};
+
+
+
+exports.getMessagesFromAdmin = async (req, res, next) => {
+  try {
+    const farmerId = req.user.id;
+
+    const messages = await Message.find({
+      to_farmer: farmerId, // Recipient is the logged-in farmer
+      sender: { $ne: null }, // Sender should be a valid user (assuming admin sends the message)
+    })
+      .populate("sender", "name email") // Populate sender's details if needed (e.g., name and email)
+      .sort({ timestamp: -1 }); // Sort messages by timestamp in descending order (most recent first)
+
+    if (!messages || messages.length === 0) {
+      return res.status(404).json({ message: "No messages from admin found" });
+    }
+
+    res.status(200).json({ messages });
+  } catch (err) {
+    console.error("Error fetching messages from admin:", err);
+    return next({
+      status: 500,
+      message: "Failed to fetch messages from admin",
+    });
   }
 };
